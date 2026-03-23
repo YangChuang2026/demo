@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>词语与图片配对</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="menu-screen" id="menuScreen">
+      <div class="menu-title">🎮 词语与图片配对</div>
+      <div class="menu-buttons">
+        <button class="menu-btn" id="startGameBtn">开始游戏</button>
+      </div>
+    </div>
+
+    <div class="table-screen" id="tableScreen">
+      <div class="table" id="table">
+        <div class="table-text">点击开始游戏</div>
+      </div>
+    </div>
+
+    <div class="game-screen" id="gameScreen">
+      <div class="game-controls">
+        <button class="control-btn" id="pauseBtn">⏸️ 暂停</button>
+        <button class="control-btn" id="restartBtn">🔄 重新游戏</button>
+        <button class="control-btn" id="exitBtn">🚪 退出</button>
+      </div>
+      <div class="header">
+        <button class="back-btn" id="backBtn">返回</button>
+        <div class="score-display">
+          配对数: <span id="score">0</span>
+          <span class="stars" id="stars">☆☆☆☆</span>
+        </div>
+        <div class="page-info" id="pageInfo">1/3</div>
+      </div>
+
+      <div class="main-content">
+        <div class="images-grid" id="imagesGrid"></div>
+
+        <div class="navigation">
+          <button class="nav-btn" id="prevBtn">◀</button>
+          <button class="nav-btn" id="nextBtn">▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="statsModal">
+    <div class="modal-card">
+      <div class="modal-title">📈 技术统计</div>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-label">正确次数/总次数</div>
+          <div class="stat-value" id="statCorrectTotal">0/0</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">准确率</div>
+          <div class="stat-value" id="statAccuracy">0%</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">平均反应时间</div>
+          <div class="stat-value" id="statReactionTime">0s</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">平均操作时间</div>
+          <div class="stat-value" id="statOperationTime">0s</div>
+        </div>
+      </div>
+      <div class="progress-message" id="progressMessage"></div>
+      <button class="modal-close-btn" id="statsModalCloseBtn">继续</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pauseModal">
+    <div class="modal-card">
+      <div class="modal-title">⏸️ 游戏暂停</div>
+      <p style="text-align: center; margin-bottom: 20px;">游戏已暂停，是否继续？</p>
+      <div class="pause-modal-buttons">
+        <button class="modal-close-btn resume-btn" id="resumeBtn">继续游戏</button>
+        <button class="modal-close-btn" id="pauseExitBtn">退出游戏</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../config.js"></script>
+  <script src="../api.js"></script>
+  <script src="data.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

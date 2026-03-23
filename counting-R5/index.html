@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数出特定数量物品 - 互动游戏</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="menu-screen" class="screen active">
+        <h1 class="menu-title">🎯 数出特定数量物品</h1>
+        <div class="menu-buttons">
+            <button class="menu-btn primary" id="menu-start-btn">开始游戏</button>
+        </div>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <div id="top-bar">
+            <div id="game-controls">
+                <button class="control-btn" id="pause-btn">⏸️ 暂停</button>
+                <button class="control-btn" id="restart-btn">🔄 重新游戏</button>
+                <button class="control-btn" id="exit-btn">🚪 退出</button>
+            </div>
+            <div id="task-display"></div>
+            <div id="stats">
+                <div id="total-display">总共找到：0 个目标物品</div>
+                <div id="rating-display">☆☆☆☆</div>
+            </div>
+        </div>
+        
+        <div id="main-area">
+            <div id="items-container"></div>
+            <div id="basket-area">
+                <div id="basket">
+                    <div id="basket-count">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="pause-screen" class="overlay">
+        <div class="pause-content">
+            <h2>游戏暂停</h2>
+            <button class="menu-btn primary" id="resume-btn">继续游戏</button>
+            <button class="menu-btn" id="pause-exit-btn">退出到菜单</button>
+        </div>
+    </div>
+
+    <div id="curtain"></div>
+
+    <div id="modal">
+        <div class="modal-content">
+            <h2 id="modal-message"></h2>
+            <button id="modal-btn">继续</button>
+        </div>
+    </div>
+
+    <div id="stats-modal">
+        <div class="stats-modal-content">
+            <h2>📊 技术统计</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">正确次数 / 总次数</div>
+                    <div class="stat-value" id="stat-correct-total">0 / 0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">准确率</div>
+                    <div class="stat-value" id="stat-accuracy">0%</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">平均反应时间</div>
+                    <div class="stat-value" id="stat-reaction-time">0ms</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">平均操作时间</div>
+                    <div class="stat-value" id="stat-operation-time">0ms</div>
+                </div>
+            </div>
+            <div id="stats-chart-container"></div>
+            <button class="menu-btn primary" id="stats-continue-btn">继续游戏</button>
+        </div>
+    </div>
+
+    <script src="../config.js"></script>
+    <script src="../api.js"></script>
+    <script src="gameConfig.js"></script>
+    <script src="stats.js"></script>
+    <script src="animation.js"></script>
+    <script src="dragDrop.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
