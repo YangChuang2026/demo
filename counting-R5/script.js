@@ -1,10 +1,42 @@
 const queryParams = new URLSearchParams(window.location.search);
+
+// 解析 difficulty，默认 1，范围 [1,2,3,4]
+let difficultyParam = parseInt(queryParams.get('difficulty')) || 1;
+if (difficultyParam < 1 || difficultyParam > 4) {
+  difficultyParam = 1;
+}
+
+// 解析 levels，根据 difficulty 自动设置
+let levelsParam = parseInt(queryParams.get('levels'));
+if (levelsParam === null || levelsParam === undefined || levelsParam < 1) {
+  if (difficultyParam === 1) levelsParam = 1;
+  else if (difficultyParam === 2) levelsParam = 2;
+  else if (difficultyParam === 3) levelsParam = 5;
+  else if (difficultyParam === 4) levelsParam = 10;
+}
+
+// 解析 stats，默认 1
+let statsParam = parseInt(queryParams.get('stats'));
+if (statsParam === null || statsParam === undefined || (statsParam !== 0 && statsParam !== 1)) {
+  statsParam = 1;
+}
+
 window.urlParams = {
-    token: queryParams.get('token') || '',
-    user_id: queryParams.get('user_id') || 'user',
-    difficulty: queryParams.get('difficulty') ? parseInt(queryParams.get('difficulty')) : null,
-    levels: queryParams.get('levels') ? parseInt(queryParams.get('levels')) : null,
-    game_id: queryParams.get('game_id') || 'R5'
+    token: queryParams.get('token') || 'test_token',
+    userId: parseInt(queryParams.get('userId')) || 0,
+    gameId: parseInt(queryParams.get('gameId')) || 0,
+    difficulty: difficultyParam,
+    levels: levelsParam,
+    stats: statsParam
+};
+
+// 游戏内部记录这些参数值
+const gameParams = {
+    userId: window.urlParams.userId,
+    gameId: window.urlParams.gameId,
+    difficulty: window.urlParams.difficulty,
+    levels: window.urlParams.levels,
+    stats: window.urlParams.stats
 };
 
 const Game = {
@@ -18,7 +50,10 @@ const Game = {
         currentTargetType: null,
         items: [],
         basketCount: 0,
-        savedState: null
+        savedState: null,
+        maxRounds: 0,      // 最大回合数（从 levels 参数获取）
+        completedRounds: 0, // 已完成的回合数
+        gameStartTime: null // 游戏开始时间
     },
 
     elements: {},
@@ -155,6 +190,8 @@ const Game = {
         this.state.basketCount = 0;
         this.state.gameStartTime = Date.now();
         this.state.finalDataSent = false;
+        this.state.maxRounds = gameParams.levels;  // 设置最大回合数
+        this.state.completedRounds = 0;
 
         Stats.init();
         this.updateRating();
@@ -442,11 +479,22 @@ const Game = {
     },
 
     handleRoundComplete: function() {
+        // 标记该回合已完成
+        this.state.completedRounds++;
+        
         Animation.createConfetti(this.elements.taskDisplay);
         
         Stats.handleRoundComplete();
         const sessionData = Stats.getAllRoundsData();
         
+        // 根据 stats 参数决定是否显示统计界面
+        if (gameParams.stats === 0) {
+            // stats=0：显示简单完成提示
+            this.showSimpleCompleteModal();
+            return;
+        }
+        
+        // stats=1：显示技术统计弹窗
         const shouldShowStats = (
             this.state.totalFound >= GameConfig.rating.fourStar ||
             this.state.totalFound >= GameConfig.rating.threeStar ||
@@ -495,12 +543,50 @@ const Game = {
         Animation.showModal(this.elements.modal);
     },
 
+    // 显示简单完成提示（stats=0 时使用）
+    showSimpleCompleteModal: function() {
+        const modal = this.elements.modal;
+        const message = this.elements.modalMessage;
+        const btn = this.elements.modalBtn;
+        
+        message.textContent = '恭喜完成！';
+        
+        // 移除旧的点击事件
+        btn.replaceWith(btn.cloneNode(true));
+        this.elements.modalBtn = document.getElementById('modal-btn');
+        
+        // 添加新的点击事件
+        this.elements.modalBtn.addEventListener('click', () => {
+            Animation.hideModal(modal, () => {
+                // 检查是否达到最大回合数
+                if (this.state.completedRounds >= this.state.maxRounds) {
+                    // 发送数据并重新开始
+                    this.sendFinalGameData();
+                    this.startGame();
+                } else {
+                    // 继续下一个回合
+                    this.startNewRound();
+                }
+            });
+        });
+    },
+
     continueGame: function() {
         Animation.hideModal(this.elements.modal, () => {
             this.updateDifficultyLevel();
-            Animation.animateCurtain(this.elements.curtain, true, () => {
-                this.startNewRound();
-            });
+            
+            // 检查是否达到最大回合数
+            if (this.state.completedRounds >= this.state.maxRounds) {
+                // 游戏结束，发送数据
+                this.sendFinalGameData();
+                alert('恭喜！已完成所有回合！');
+                this.exitToMenu();
+            } else {
+                // 继续下一个回合
+                Animation.animateCurtain(this.elements.curtain, true, () => {
+                    this.startNewRound();
+                });
+            }
         });
     },
 
@@ -581,118 +667,112 @@ const Game = {
         }
         this.state.finalDataSent = true;
 
-        // user_id：从 URL 参数获取，默认为 "user"
-        const user_id = window.urlParams.user_id || 'user';
+        // userId：长整型，从 URL 参数获取，默认 0
+        const userId = window.urlParams.userId || 0;
         
-        // game_id：从 URL 参数获取，默认为 "R5"
-        const game_id = window.urlParams.game_id || 'R5';
-
-        // difficulty：优先使用 URL 参数，否则根据星级计算
-        let difficulty = window.urlParams.difficulty;
-        if (difficulty === null || difficulty === undefined) {
-            let stars = 0;
-            if (this.state.totalFound >= GameConfig.rating.fourStar) {
-                stars = 4;
-            } else if (this.state.totalFound >= GameConfig.rating.threeStar) {
-                stars = 3;
-            } else if (this.state.totalFound >= GameConfig.rating.twoStar) {
-                stars = 2;
-            } else if (this.state.totalFound >= GameConfig.rating.oneStar) {
-                stars = 1;
-            }
-            difficulty = stars;
-        } else {
-            difficulty = parseInt(difficulty);
-        }
-
-        // levels：优先使用 URL 参数，否则使用已完成的回合数
-        let levels = window.urlParams.levels;
-        if (levels === null || levels === undefined) {
-            levels = Stats.currentSession.rounds.length;
-        } else {
-            levels = parseInt(levels);
-        }
-
-        // 计算所有回合的正确次数和总尝试次数
-        let totalCorrect = 0;
-        let totalAttempts = 0;
-        Stats.currentSession.rounds.forEach(round => {
-            totalCorrect += round.correctCount;
-            totalAttempts += round.totalAttempts;
-        });
+        // gameId：长整型，从 URL 参数获取，默认 0
+        const gameId = window.urlParams.gameId || 0;
         
-        // accuracy：正确率（0~1），无尝试则为 -1
-        const accuracy = totalAttempts > 0 ? totalCorrect / totalAttempts : -1;
-
-        // 构建时间数组
-        const reaction_time = [];
-        const operation_time = [];
-        const total_time = [];
+        // game：固定为 "ABLLS_R5"
+        const game = 'ABLLS_R5';
         
-        Stats.currentSession.rounds.forEach(round => {
-            // reaction_time：整数，无反应时间则为 -1
-            if (round.reactionTime && round.reactionTime > 0) {
-                reaction_time.push(Math.round(round.reactionTime));
+        // difficulty：从 URL 参数获取，默认 1
+        const difficulty = gameParams.difficulty || 1;
+        
+        // levels：从 URL 参数获取，默认根据 difficulty 设置
+        const levels = gameParams.levels || (difficulty === 1 ? 1 : difficulty === 2 ? 2 : difficulty === 3 ? 5 : 10);
+        
+        // 计算 accuracy：正确完成的回合数 / 总回合数
+        // 正确完成的回合 = k===0 的回合数
+        let completedCount = 0;
+        const reactionTime = [];
+        const operationTime = [];
+        const totalTime = [];
+        
+        for (let i = 0; i < levels; i++) {
+            const round = Stats.currentSession.rounds[i];
+            if (round) {
+                // 检查该回合是否正确完成（k===0 表示达到目标数量）
+                // 这里简化处理：只要有 operationTime 就认为完成了
+                if (round.operationTime && round.operationTime > 0) {
+                    completedCount++;
+                }
+                
+                // reactionTime：整数，无反应时间则为 -1
+                if (round.reactionTime && round.reactionTime > 0) {
+                    reactionTime.push(Math.round(round.reactionTime));
+                } else {
+                    reactionTime.push(-1);
+                }
+                
+                // operationTime：整数，无操作时间则为 -1
+                if (round.operationTime && round.operationTime > 0) {
+                    operationTime.push(Math.round(round.operationTime));
+                } else {
+                    operationTime.push(-1);
+                }
+                
+                // totalTime：反应时间 + 操作时间
+                const rt = reactionTime[reactionTime.length - 1];
+                const ot = operationTime[operationTime.length - 1];
+                
+                let total = -1;
+                if (rt !== -1 && ot !== -1) {
+                    total = rt + ot;
+                } else if (rt !== -1) {
+                    total = rt;
+                } else if (ot !== -1) {
+                    total = ot;
+                }
+                totalTime.push(total);
             } else {
-                reaction_time.push(-1);
+                // 该回合未进行，填充 -1
+                reactionTime.push(-1);
+                operationTime.push(-1);
+                totalTime.push(-1);
             }
-            
-            // operation_time：整数，无操作时间则为 -1
-            if (round.operationTime && round.operationTime > 0) {
-                operation_time.push(Math.round(round.operationTime));
-            } else {
-                operation_time.push(-1);
-            }
-            
-            // total_time：反应时间 + 操作时间
-            // 若反应时间为 -1 则只取操作时间，若两者都为 -1 则填 -1
-            const rt = reaction_time[reaction_time.length - 1];
-            const ot = operation_time[operation_time.length - 1];
-            
-            let total = -1;
-            if (rt !== -1 && ot !== -1) {
-                total = rt + ot;
-            } else if (rt !== -1) {
-                total = rt;
-            } else if (ot !== -1) {
-                total = ot;
-            }
-            total_time.push(total);
-        });
+        }
         
-        // game_time：从游戏开始到最后一个回合结束的毫秒数
-        let game_time = 0;
+        // accuracy：正确完成的回合数 / 总回合数
+        const accuracy = levels > 0 ? completedCount / levels : 0;
+        
+        // gameTime：从游戏开始到最后一个回合结束的毫秒数
+        let gameTime = 0;
         if (this.state.gameStartTime) {
             const lastRoundEndTime = Stats.currentSession.rounds.length > 0 
                 ? Stats.currentSession.rounds[Stats.currentSession.rounds.length - 1].endTime 
                 : 0;
             if (lastRoundEndTime > 0) {
-                game_time = Math.round(lastRoundEndTime - this.state.gameStartTime);
+                gameTime = Math.round(lastRoundEndTime - this.state.gameStartTime);
             } else {
-                game_time = Math.round(Date.now() - this.state.gameStartTime);
+                gameTime = Math.round(Date.now() - this.state.gameStartTime);
             }
         }
         
         // timestamp：ISO 8601 格式 UTC 时间
         const timestamp = new Date().toISOString();
-
-        const data = {
-            user_id,
-            game_id,
-            difficulty,
-            levels,
-            accuracy,
-            reaction_time,
-            operation_time,
-            total_time,
-            game_time,
-            timestamp
+        
+        // 构建数据对象
+        const gameData = {
+            userId: userId,
+            game: game,
+            gameId: gameId,
+            gameResult: {
+                difficulty: difficulty,
+                levels: levels,
+                accuracy: accuracy,
+                reactionTime: reactionTime,
+                operationTime: operationTime,
+                totalTime: totalTime
+            },
+            gameTime: gameTime,
+            timestamp: timestamp
         };
-
-        console.log('发送游戏数据:', data);
-
+        
+        console.log('发送游戏数据:', gameData);
+        
         if (typeof sendGameData === 'function') {
-            sendGameData(data);
+            sendGameData(gameData);
         }
     },
 
