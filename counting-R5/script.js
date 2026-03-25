@@ -39,6 +39,35 @@ const gameParams = {
     stats: window.urlParams.stats
 };
 
+// 难度等级与星星数映射（基于累计正确数）
+const DIFFICULTY_THRESHOLDS = {
+    1: 0,    // 难度1（0星）初始
+    2: 2,    // 难度2（1星）完成2次正确
+    3: 5,    // 难度3（2星）完成5次正确
+    4: 10    // 难度4（3星）完成10次正确
+};
+
+// 根据当前难度获取总关卡数
+function getTotalLevelsForDifficulty(difficulty) {
+    if (difficulty === 1) return 1;
+    if (difficulty === 2) return 2;
+    if (difficulty === 3) return 5;
+    if (difficulty === 4) return 10;
+    return 1;
+}
+
+// 检查是否达到新的难度等级
+function checkDifficultyUpgrade() {
+    const currentStars = Game.getStarRating();  // 0-4，基于 totalFound
+    const achievedDifficulty = currentStars === 0 ? 1 : currentStars + 1;
+    
+    if (achievedDifficulty > gameParams.difficulty) {
+        gameParams.difficulty = achievedDifficulty;
+        return true;
+    }
+    return false;
+}
+
 const Game = {
     state: {
         isPlaying: false,
@@ -53,7 +82,8 @@ const Game = {
         savedState: null,
         maxRounds: 0,      // 最大回合数（从 levels 参数获取）
         completedRounds: 0, // 已完成的回合数
-        gameStartTime: null // 游戏开始时间
+        gameStartTime: null, // 游戏开始时间
+        uploadedDifficulty: 0  // 记录已上传数据的难度等级，防止重复上传
     },
 
     elements: {},
@@ -189,7 +219,7 @@ const Game = {
         this.state.totalFound = 0;
         this.state.basketCount = 0;
         this.state.gameStartTime = Date.now();
-        this.state.finalDataSent = false;
+        this.state.uploadedDifficulty = 0;
         this.state.maxRounds = gameParams.levels;  // 设置最大回合数
         this.state.completedRounds = 0;
 
@@ -487,10 +517,15 @@ const Game = {
         Stats.handleRoundComplete();
         const sessionData = Stats.getAllRoundsData();
         
+        // 检查是否达到新的难度等级（先不修改状态）
+        const currentStars = Game.getStarRating();
+        const achievedDifficulty = currentStars === 0 ? 1 : currentStars + 1;
+        const shouldShowCelebration = (achievedDifficulty > gameParams.difficulty);
+        
         // 根据 stats 参数决定是否显示统计界面
         if (gameParams.stats === 0) {
             // stats=0：显示简单完成提示
-            this.showSimpleCompleteModal();
+            this.showSimpleCompleteModal(shouldShowCelebration);
             return;
         }
         
@@ -503,13 +538,13 @@ const Game = {
         );
         
         if (shouldShowStats) {
-            this.showStatsModal(sessionData);
+            this.showStatsModal(sessionData, shouldShowCelebration);
         } else {
             this.showModal('你完成了任务！');
         }
     },
 
-    showStatsModal: function(sessionData) {
+    showStatsModal: function(sessionData, showCelebration = false) {
         this.elements.statCorrectTotal.textContent = `${sessionData.totalCorrect} / ${sessionData.totalAttempts}`;
         
         const accuracy = sessionData.totalAttempts > 0 
@@ -524,6 +559,20 @@ const Game = {
         this.elements.statReactionTime.textContent = Stats.formatTime(avgReactionTime);
         this.elements.statOperationTime.textContent = Stats.formatTime(avgOperationTime);
         
+        // 显示祝贺信息（如果难度升级）
+        const progressMessage = document.getElementById('progressMessage');
+        if (progressMessage) {
+            if (showCelebration) {
+                progressMessage.textContent = '🎉 恭喜！你完成了这一难度的所有关卡！';
+                progressMessage.style.color = '#4CAF50';
+                progressMessage.style.fontWeight = 'bold';
+                progressMessage.style.fontSize = '1.1em';
+                progressMessage.style.display = 'block';
+            } else {
+                progressMessage.style.display = 'none';
+            }
+        }
+        
         this.elements.statsModal.style.display = 'flex';
         setTimeout(() => {
             this.elements.statsModal.classList.add('show');
@@ -534,6 +583,16 @@ const Game = {
         this.elements.statsModal.classList.remove('show');
         setTimeout(() => {
             this.elements.statsModal.style.display = 'none';
+            
+            // 检查是否达到新的难度等级
+            const difficultyUpgraded = checkDifficultyUpgrade();
+            
+            // 如果难度升级且尚未上传过该难度的数据，则上传
+            if (difficultyUpgraded && this.state.uploadedDifficulty < gameParams.difficulty) {
+                this.sendFinalGameData();
+                this.state.uploadedDifficulty = gameParams.difficulty;
+            }
+            
             this.continueGame();
         }, 300);
     },
@@ -544,12 +603,16 @@ const Game = {
     },
 
     // 显示简单完成提示（stats=0 时使用）
-    showSimpleCompleteModal: function() {
+    showSimpleCompleteModal: function(showCelebration = false) {
         const modal = this.elements.modal;
         const message = this.elements.modalMessage;
         const btn = this.elements.modalBtn;
         
-        message.textContent = '恭喜完成！';
+        if (showCelebration) {
+            message.textContent = '🎉 恭喜！你完成了这一难度的所有关卡！';
+        } else {
+            message.textContent = '恭喜完成！';
+        }
         
         // 移除旧的点击事件
         btn.replaceWith(btn.cloneNode(true));
@@ -558,10 +621,18 @@ const Game = {
         // 添加新的点击事件
         this.elements.modalBtn.addEventListener('click', () => {
             Animation.hideModal(modal, () => {
+                // 检查是否达到新的难度等级
+                const difficultyUpgraded = checkDifficultyUpgrade();
+                
+                // 如果难度升级且尚未上传过该难度的数据，则上传
+                if (difficultyUpgraded && this.state.uploadedDifficulty < gameParams.difficulty) {
+                    this.sendFinalGameData();
+                    this.state.uploadedDifficulty = gameParams.difficulty;
+                }
+                
                 // 检查是否达到最大回合数
                 if (this.state.completedRounds >= this.state.maxRounds) {
-                    // 发送数据并重新开始
-                    this.sendFinalGameData();
+                    // 重新开始
                     this.startGame();
                 } else {
                     // 继续下一个回合
@@ -577,8 +648,7 @@ const Game = {
             
             // 检查是否达到最大回合数
             if (this.state.completedRounds >= this.state.maxRounds) {
-                // 游戏结束，发送数据
-                this.sendFinalGameData();
+                // 游戏结束
                 alert('恭喜！已完成所有回合！');
                 this.exitToMenu();
             } else {
@@ -603,7 +673,7 @@ const Game = {
         this.elements.totalDisplay.textContent = `总共找到：${this.state.totalFound} 个目标物品`;
     },
 
-    updateRating: function() {
+    getStarRating: function() {
         let stars = 0;
         if (this.state.totalFound >= GameConfig.rating.fourStar) {
             stars = 4;
@@ -614,7 +684,11 @@ const Game = {
         } else if (this.state.totalFound >= GameConfig.rating.oneStar) {
             stars = 1;
         }
-        
+        return stars;
+    },
+
+    updateRating: function() {
+        const stars = this.getStarRating();
         this.elements.ratingDisplay.textContent = '★'.repeat(stars) + '☆'.repeat(4 - stars);
     },
 
@@ -642,7 +716,6 @@ const Game = {
     restartRound: function() {
         if (!this.state.isPlaying) return;
         
-        this.state.finalDataSent = false;
         Stats.init();
         Animation.animateCurtain(this.elements.curtain, true, () => {
             this.state.k = this.state.n;
@@ -662,11 +735,6 @@ const Game = {
             return;
         }
 
-        if (this.state.finalDataSent) {
-            return;
-        }
-        this.state.finalDataSent = true;
-
         // userId：长整型，从 URL 参数获取，默认 0
         const userId = window.urlParams.userId || 0;
         
@@ -676,15 +744,22 @@ const Game = {
         // game：固定为 "ABLLS_R5"
         const game = 'ABLLS_R5';
         
-        // difficulty：从 URL 参数获取，默认 1
+        // difficulty：当前已完成难度等级（星星数）
         const difficulty = gameParams.difficulty || 1;
         
-        // levels：从 URL 参数获取，默认根据 difficulty 设置
-        const levels = gameParams.levels || (difficulty === 1 ? 1 : difficulty === 2 ? 2 : difficulty === 3 ? 5 : 10);
+        // levels：根据当前难度自动计算（1→1, 2→2, 3→5, 4→10）
+        const levels = getTotalLevelsForDifficulty(difficulty);
         
-        // 计算 accuracy：正确完成的回合数 / 总回合数
-        // 正确完成的回合 = k===0 的回合数
-        let completedCount = 0;
+        // 计算 accuracy：正确放入木框次数 / 放入木框的物品总数
+        let totalCorrect = 0;
+        let totalAttempts = 0;
+        Stats.currentSession.rounds.forEach(round => {
+            totalCorrect += round.correctCount || 0;
+            totalAttempts += round.totalAttempts || 0;
+        });
+        const accuracy = totalAttempts > 0 ? totalCorrect / totalAttempts : 0;
+        
+        // 构建时间数组
         const reactionTime = [];
         const operationTime = [];
         const totalTime = [];
@@ -692,12 +767,6 @@ const Game = {
         for (let i = 0; i < levels; i++) {
             const round = Stats.currentSession.rounds[i];
             if (round) {
-                // 检查该回合是否正确完成（k===0 表示达到目标数量）
-                // 这里简化处理：只要有 operationTime 就认为完成了
-                if (round.operationTime && round.operationTime > 0) {
-                    completedCount++;
-                }
-                
                 // reactionTime：整数，无反应时间则为 -1
                 if (round.reactionTime && round.reactionTime > 0) {
                     reactionTime.push(Math.round(round.reactionTime));
@@ -732,9 +801,6 @@ const Game = {
                 totalTime.push(-1);
             }
         }
-        
-        // accuracy：正确完成的回合数 / 总回合数
-        const accuracy = levels > 0 ? completedCount / levels : 0;
         
         // gameTime：从游戏开始到最后一个回合结束的毫秒数
         let gameTime = 0;
