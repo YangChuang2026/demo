@@ -747,8 +747,8 @@ const Game = {
         // difficulty：当前已完成难度等级（星星数）
         const difficulty = gameParams.difficulty || 1;
         
-        // levels：根据当前难度自动计算（1→1, 2→2, 3→5, 4→10）
-        const levels = getTotalLevelsForDifficulty(difficulty);
+        // levels：玩家实际完成的回合数
+        const levels = Stats.currentSession.rounds.length;
         
         // 计算 accuracy：正确放入木框次数 / 放入木框的物品总数
         let totalCorrect = 0;

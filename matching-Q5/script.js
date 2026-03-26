@@ -1,4 +1,4 @@
-﻿// 解析 URL 参数
+﻿﻿﻿﻿﻿﻿﻿﻿﻿// 解析 URL 参数
 function parseUrlParams() {
   const queryParams = new URLSearchParams(window.location.search);
   
@@ -64,11 +64,12 @@ function getTotalLevelsForDifficulty(difficulty) {
   return 1;
 }
 
-// 检查是否达到新的难度等级
+// 检查是否达到新的难度等级（根据星星数即时升级）
 function checkDifficultyUpgrade() {
   const currentStars = getStarRating();  // 0-4
   const achievedDifficulty = currentStars === 0 ? 1 : currentStars + 1;
   
+  // 如果达到更高难度，立即升级
   if (achievedDifficulty > gameParams.difficulty) {
     gameParams.difficulty = achievedDifficulty;
     return true;
@@ -80,6 +81,7 @@ let state = {
   currentPage: 1,
   totalPages: 0,
   matchedPairs: [],
+  wrongPairs: [],  // 记录配对错误的图片 ID
   pages: [],
   selectedImage: null,
   isPaused: false,
@@ -89,7 +91,9 @@ let state = {
   gameStartTime: null,
   completedPages: 0,
   prevStarRating: 0,
-  uploadedDifficulty: 0
+  uploadedDifficulty: 0,
+  completedLevelsInCurrentDifficulty: 0,  // 记录当前难度已完成的关卡数
+  lastStarRating: 0  // 记录上次上报时的星级，用于检测星级提升
 };
 
 function shuffleArray(array) {
@@ -125,7 +129,8 @@ function initializePageStats() {
       pageEnterTime: null,
       firstImageClickTime: null,
       imageClickTimes: {},
-      pageTotalOperationTime: null
+      pageTotalOperationTime: null,
+      pageEndTime: null  // 页面结束时间
     };
   }
 }
@@ -164,7 +169,10 @@ function updatePageInfo() {
 
 function isPageComplete(pageNum) {
   const pageData = state.pages[pageNum - 1];
-  return pageData.every(pair => state.matchedPairs.includes(pair.id));
+  // 页面完成条件：所有图片都已匹配或标记为错误
+  return pageData.every(pair => 
+    state.matchedPairs.includes(pair.id) || state.wrongPairs.includes(pair.id)
+  );
 }
 
 function updateNavigationButtons() {
@@ -218,12 +226,23 @@ function renderCurrentPage() {
     state.pageStats[state.currentPage].pageEnterTime = Date.now();
   }
   
+  // 自动选中第一个未匹配且未标记为错误的图片
+  if (!state.selectedImage) {
+    const firstUnmatchedPair = currentPageData.find(pair => 
+      !state.matchedPairs.includes(pair.id) && !state.wrongPairs.includes(pair.id)
+    );
+    if (firstUnmatchedPair) {
+      state.selectedImage = firstUnmatchedPair.id;
+    }
+  }
+  
   currentPageData.forEach((pair) => {
     const isMatched = state.matchedPairs.includes(pair.id);
+    const isWrong = state.wrongPairs.includes(pair.id);
     const isSelected = state.selectedImage === pair.id;
     
     const card = document.createElement('div');
-    card.className = `image-card ${isMatched ? 'matched' : ''} ${isSelected ? 'selected' : ''}`;
+    card.className = `image-card ${isMatched ? 'matched' : ''} ${isWrong ? 'wrong' : ''} ${isSelected ? 'selected' : ''}`;
     card.dataset.pairId = pair.id;
     
     const imageDisplay = document.createElement('div');
@@ -236,7 +255,7 @@ function renderCurrentPage() {
     optionsContainer.className = `word-options-container ${isSelected ? 'active' : ''}`;
     optionsContainer.id = `options-${pair.id}`;
     
-    if (isSelected && !isMatched) {
+    if (isSelected && !isMatched && !isWrong) {
       const options = generateWordOptions(pair);
       const optionsWrapper = document.createElement('div');
       optionsWrapper.className = 'word-options';
@@ -255,10 +274,6 @@ function renderCurrentPage() {
       optionsContainer.appendChild(optionsWrapper);
     }
     
-    if (!isMatched) {
-      card.onclick = () => selectImage(pair.id);
-    }
-    
     card.appendChild(optionsContainer);
     imagesGrid.appendChild(card);
   });
@@ -266,24 +281,6 @@ function renderCurrentPage() {
   updatePageInfo();
   updateNavigationButtons();
   updateScoreDisplay();
-}
-
-function selectImage(pairId) {
-  if (state.matchedPairs.includes(pairId) || state.isPaused || state.isProcessing) return;
-  
-  const pageStats = state.pageStats[state.currentPage];
-  
-  if (!pageStats.firstImageClickTime) {
-    pageStats.firstImageClickTime = Date.now();
-    pageStats.reactionTime = pageStats.firstImageClickTime - pageStats.pageEnterTime;
-  }
-  
-  if (!pageStats.imageClickTimes[pairId]) {
-    pageStats.imageClickTimes[pairId] = Date.now();
-  }
-  
-  state.selectedImage = state.selectedImage === pairId ? null : pairId;
-  renderCurrentPage();
 }
 
 function handleWordSelection(pairId, selectedWord) {
@@ -296,6 +293,17 @@ function handleWordSelection(pairId, selectedWord) {
   const pageStats = state.pageStats[state.currentPage];
   pageStats.totalAttempts++;
   
+  // 如果是本页面的第一次选择，记录反应时间
+  if (!pageStats.firstImageClickTime) {
+    pageStats.firstImageClickTime = Date.now();
+    pageStats.reactionTime = pageStats.firstImageClickTime - pageStats.pageEnterTime;
+  }
+  
+  // 记录当前图片的点击时间（用于计算操作时间）
+  if (!pageStats.imageClickTimes[pairId]) {
+    pageStats.imageClickTimes[pairId] = Date.now();
+  }
+  
   const optionsContainer = document.getElementById(`options-${pairId}`);
   const optionButtons = optionsContainer.querySelectorAll('.word-option');
   
@@ -307,38 +315,52 @@ function handleWordSelection(pairId, selectedWord) {
     }
   });
   
-  if (selectedWord === pair.word) {
-    pageStats.correctCount++;
-    state.isProcessing = true;
-    
-    if (pageStats.imageClickTimes[pairId]) {
-      const operationTime = Date.now() - pageStats.imageClickTimes[pairId];
-      pageStats.operationTimes.push(operationTime);
+  // 无论对错，都立即处理并标记为已处理
+  state.isProcessing = true;
+  
+  if (pageStats.imageClickTimes[pairId]) {
+    const operationTime = Date.now() - pageStats.imageClickTimes[pairId];
+    pageStats.operationTimes.push(operationTime);
+  }
+  
+  setTimeout(() => {
+    if (selectedWord === pair.word) {
+      // 正确：标记为已匹配
+      pageStats.correctCount++;
+      state.matchedPairs.push(pairId);
+    } else {
+      // 错误：标记为错误，不再允许选择
+      state.wrongPairs.push(pairId);
     }
     
-    setTimeout(() => {
-      state.matchedPairs.push(pairId);
-      state.selectedImage = null;
-      state.isProcessing = false;
-      renderCurrentPage();
-      
-      if (isPageComplete(state.currentPage)) {
-        showStatsModal();
-      }
-    }, 800);
-  }
+    // 清空选中，自动选中下一个未处理的图片
+    state.selectedImage = null;
+    state.isProcessing = false;
+    renderCurrentPage();
+    
+    // 检查页面是否完成（所有图片都已匹配或标记为错误）
+    if (isPageComplete(state.currentPage)) {
+      showStatsModal();
+    }
+  }, 800);
 }
 
 function goToPrevPage() {
   if (state.currentPage > 1 && !state.isPaused) {
     state.currentPage--;
-    state.selectedImage = null;
+    state.selectedImage = null;  // 重置选中，让上一页自动选中第一个
     renderCurrentPage();
   }
 }
 
 function goToNextPage() {
   if (state.currentPage < state.totalPages && isPageComplete(state.currentPage) && !state.isPaused) {
+    state.currentPage++;
+    state.selectedImage = null;  // 重置选中，让下一页自动选中第一个
+    renderCurrentPage();
+  } else if (state.currentPage >= state.totalPages && isPageComplete(state.currentPage) && !state.isPaused) {
+    // 已经是最后一页且已完成，添加新页面
+    addMorePage();
     state.currentPage++;
     state.selectedImage = null;
     renderCurrentPage();
@@ -362,7 +384,8 @@ function addMorePage() {
       pageEnterTime: null,
       firstImageClickTime: null,
       imageClickTimes: {},
-      pageTotalOperationTime: null
+      pageTotalOperationTime: null,
+      pageEndTime: null
     };
   } else if (availablePairs.length > 0) {
     state.pages.push(availablePairs);
@@ -375,7 +398,25 @@ function addMorePage() {
       pageEnterTime: null,
       firstImageClickTime: null,
       imageClickTimes: {},
-      pageTotalOperationTime: null
+      pageTotalOperationTime: null,
+      pageEndTime: null
+    };
+  } else {
+    // 所有配对都已使用，重新开始循环使用所有配对
+    const shuffledAll = shuffleArray(wordImagePairs);
+    const newPage = shuffledAll.slice(0, 3);
+    state.pages.push(newPage);
+    state.totalPages++;
+    state.pageStats[state.totalPages] = {
+      correctCount: 0,
+      totalAttempts: 0,
+      reactionTime: null,
+      operationTimes: [],
+      pageEnterTime: null,
+      firstImageClickTime: null,
+      imageClickTimes: {},
+      pageTotalOperationTime: null,
+      pageEndTime: null
     };
   }
 }
@@ -383,41 +424,27 @@ function addMorePage() {
 function showStatsModal(showCelebration = false) {
   const pageStats = state.pageStats[state.currentPage];
   
-  pageStats.pageTotalOperationTime = pageStats.operationTimes.length > 0
-    ? pageStats.operationTimes.reduce((a, b) => a + b, 0)
-    : 0;
+  // 记录页面结束时间
+  const pageEndTime = Date.now();
+  pageStats.pageEndTime = pageEndTime;
   
-  state.completedPages++;
-  
-  const currentStars = getStarRating();
-  const achievedDifficulty = currentStars === 0 ? 1 : currentStars + 1;
-  const shouldShowCelebration = (achievedDifficulty > gameParams.difficulty) || showCelebration;
-  
-  if (gameParams.stats === 0) {
-    showSimpleCompleteModal(shouldShowCelebration);
-    return;
+  // 计算操作时间：从页面首次点击到页面结束的总时间
+  if (pageStats.firstImageClickTime && pageStats.pageEndTime) {
+    pageStats.pageTotalOperationTime = pageStats.pageEndTime - pageStats.firstImageClickTime;
+  } else {
+    pageStats.pageTotalOperationTime = 0;
   }
   
-  document.getElementById('statCorrectTotal').textContent = `${pageStats.correctCount}/${pageStats.totalAttempts}`;
+  state.completedPages++;
+  state.completedLevelsInCurrentDifficulty++;  // 增加当前难度已完成关卡计数
   
-  const accuracy = pageStats.totalAttempts > 0 
-    ? Math.round((pageStats.correctCount / pageStats.totalAttempts) * 100) 
-    : 0;
-  document.getElementById('statAccuracy').textContent = `${accuracy}%`;
+  // 检查是否达到新的难度等级
+  const difficultyUpgraded = checkDifficultyUpgrade();
   
-  const reactionTime = pageStats.reactionTime 
-    ? (pageStats.reactionTime / 1000).toFixed(1) 
-    : '0';
-  document.getElementById('statReactionTime').textContent = `${reactionTime}s`;
-  
-  const avgOperationTime = pageStats.operationTimes.length > 0
-    ? (pageStats.operationTimes.reduce((a, b) => a + b, 0) / pageStats.operationTimes.length / 1000).toFixed(1)
-    : '0';
-  document.getElementById('statOperationTime').textContent = `${avgOperationTime}s`;
-  
+  // 进度消息：根据是否升级难度显示不同消息
   const progressMessage = document.getElementById('progressMessage');
   
-  if (shouldShowCelebration) {
+  if (difficultyUpgraded) {
     progressMessage.textContent = '🎉 恭喜！你完成了这一难度的所有关卡！';
     progressMessage.style.color = '#4CAF50';
     progressMessage.style.fontWeight = 'bold';
@@ -441,6 +468,29 @@ function showStatsModal(showCelebration = false) {
   
   state.previousPageReactionTime = pageStats.reactionTime;
   
+  // 根据 stats 参数和 difficultyUpgraded 决定显示哪个弹窗
+  if (gameParams.stats === 0) {
+    showSimpleCompleteModal(difficultyUpgraded);
+    return;
+  }
+  
+  document.getElementById('statCorrectTotal').textContent = `${pageStats.correctCount}/${pageStats.totalAttempts}`;
+  
+  const accuracy = pageStats.totalAttempts > 0 
+    ? Math.round((pageStats.correctCount / pageStats.totalAttempts) * 100) 
+    : 0;
+  document.getElementById('statAccuracy').textContent = `${accuracy}%`;
+  
+  const reactionTime = pageStats.reactionTime 
+    ? (pageStats.reactionTime / 1000).toFixed(1) 
+    : '0';
+  document.getElementById('statReactionTime').textContent = `${reactionTime}s`;
+  
+  const avgOperationTime = pageStats.operationTimes.length > 0
+    ? (pageStats.operationTimes.reduce((a, b) => a + b, 0) / pageStats.operationTimes.length / 1000).toFixed(1)
+    : '0';
+  document.getElementById('statOperationTime').textContent = `${avgOperationTime}s`;
+  
   document.getElementById('statsModal').classList.add('active');
   
   saveGameHistory(pageStats, accuracy, reactionTime, avgOperationTime);
@@ -450,25 +500,24 @@ function showStatsModal(showCelebration = false) {
   document.getElementById('statsModalCloseBtn').addEventListener('click', function onClose() {
     document.getElementById('statsModal').classList.remove('active');
     
-    const difficultyUpgraded = checkDifficultyUpgrade();
+    // 获取当前星级
+    const currentStars = getStarRating();
     
-    if (difficultyUpgraded && state.uploadedDifficulty < gameParams.difficulty) {
+    // 如果星级提升，立即上报数据
+    if (currentStars > state.lastStarRating) {
       collectAndSendGameData();
-      state.uploadedDifficulty = gameParams.difficulty;
+      state.lastStarRating = currentStars;
     }
     
+    // 检查是否需要添加新页面
+    if (state.currentPage >= state.totalPages) {
+      // 完成所有预设关卡，自动添加新关卡
+      addMorePage();
+    }
+    
+    // 前进到下一页
     if (state.currentPage < state.totalPages) {
       state.currentPage++;
-    } else {
-      const usedIds = state.pages.flat().map(p => p.id);
-      const availablePairs = wordImagePairs.filter(p => !usedIds.includes(p.id));
-      if (availablePairs.length > 0) {
-        addMorePage();
-        state.currentPage = state.totalPages;
-      } else {
-        alert('恭喜！所有词语已配对完毕！');
-        return;
-      }
     }
     
     state.selectedImage = null;
@@ -493,21 +542,28 @@ function showSimpleCompleteModal(showCelebration = false) {
     modal.style.display = 'none';
     modal.classList.remove('active');
     
-    const difficultyUpgraded = checkDifficultyUpgrade();
+    // 获取当前星级
+    const currentStars = getStarRating();
     
-    if (difficultyUpgraded && state.uploadedDifficulty < gameParams.difficulty) {
+    // 如果星级提升，立即上报数据
+    if (currentStars > state.lastStarRating) {
       collectAndSendGameData();
-      state.uploadedDifficulty = gameParams.difficulty;
+      state.lastStarRating = currentStars;
     }
     
+    // 检查是否需要添加新页面
     if (state.currentPage >= state.totalPages) {
-      resetGame();
-      renderCurrentPage();
-    } else {
-      state.currentPage++;
-      state.selectedImage = null;
-      renderCurrentPage();
+      // 完成所有预设关卡，自动添加新关卡
+      addMorePage();
     }
+    
+    // 前进到下一页
+    if (state.currentPage < state.totalPages) {
+      state.currentPage++;
+    }
+    
+    state.selectedImage = null;
+    renderCurrentPage();
   });
   
   modal.style.display = 'flex';
@@ -542,7 +598,8 @@ function collectAndSendGameData() {
   const gameId = window.urlParams.gameId || 0;
   const game = 'ABLLS_Q5';
   const difficulty = gameParams.difficulty || 1;
-  const levels = getTotalLevelsForDifficulty(difficulty);
+  // 使用实际完成的页面数作为 levels
+  const levels = state.completedPages;
   
   let totalCorrect = 0;
   let totalAttempts = 0;
@@ -556,6 +613,7 @@ function collectAndSendGameData() {
   const operationTime = [];
   const totalTime = [];
   
+  // 遍历所有已完成的页面
   for (let i = 1; i <= levels; i++) {
     const pageStat = state.pageStats[i];
     if (pageStat) {
@@ -651,6 +709,7 @@ function resetGame() {
   state.totalPages = totalPages;
   
   state.matchedPairs = [];
+  state.wrongPairs = [];  // 重置错误标记
   state.selectedImage = null;
   state.isPaused = false;
   state.isProcessing = false;
@@ -659,6 +718,8 @@ function resetGame() {
   state.completedPages = 0;
   state.prevStarRating = 0;
   state.uploadedDifficulty = 0;
+  state.completedLevelsInCurrentDifficulty = 0;  // 重置当前难度已完成关卡计数
+  state.lastStarRating = 0;  // 重置上次上报时的星级
   
   initializePages();
 }

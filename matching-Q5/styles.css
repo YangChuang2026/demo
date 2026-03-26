@@ -167,6 +167,13 @@ body {
   opacity: 0.7;
 }
 
+.image-card.wrong {
+  background: #f8d7da;
+  border-color: #dc3545;
+  cursor: default;
+  opacity: 0.7;
+}
+
 .image-display {
   font-size: 80px;
   margin-bottom: 20px;
