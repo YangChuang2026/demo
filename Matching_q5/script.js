@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿// 解析 URL 参数
+﻿﻿// 解析 URL 参数
 function parseUrlParams() {
   const queryParams = new URLSearchParams(window.location.search);
   
@@ -209,29 +209,30 @@ function updateNavigationButtons() {
   nextBtn.disabled = !canGoNext;
 }
 
-function generateWordOptions(correctPair) {
-  const usedWords = state.matchedPairs.map(id => {
+// 生成图片选项（替代原 generateWordOptions）
+function generateImageOptions(correctPair) {
+  const usedIcons = state.matchedPairs.map(id => {
     const pair = wordImagePairs.find(p => p.id === id);
-    return pair ? pair.word : null;
+    return pair ? pair.icon : null;
   }).filter(Boolean);
   
-  let options = [correctPair.word];
+  let options = [correctPair.icon];
   
   const otherPairs = wordImagePairs.filter(p => 
-    p.id !== correctPair.id && !usedWords.includes(p.word)
+    p.id !== correctPair.id && !usedIcons.includes(p.icon)
   );
   
   const shuffledOthers = shuffleArray(otherPairs);
   const additionalOptions = shuffledOthers.slice(0, 4);
   
-  options = options.concat(additionalOptions.map(p => p.word));
+  options = options.concat(additionalOptions.map(p => p.icon));
   
   while (options.length < 5) {
     const backupPairs = wordImagePairs.filter(p => 
-      p.id !== correctPair.id && !options.includes(p.word)
+      p.id !== correctPair.id && !options.includes(p.icon)
     );
     if (backupPairs.length > 0) {
-      options.push(backupPairs[0].word);
+      options.push(backupPairs[0].icon);
     } else {
       break;
     }
@@ -269,28 +270,35 @@ function renderCurrentPage() {
     card.className = `image-card ${isMatched ? 'matched' : ''} ${isWrong ? 'wrong' : ''} ${isSelected ? 'selected' : ''}`;
     card.dataset.pairId = pair.id;
     
-    const imageDisplay = document.createElement('div');
-    imageDisplay.className = 'image-display';
-    imageDisplay.textContent = pair.icon;
+    // 显示文字而不是图片
+    const textDisplay = document.createElement('div');
+    textDisplay.className = 'image-display';
+    textDisplay.textContent = pair.word;
+    textDisplay.style.fontSize = '1.5rem';
+    textDisplay.style.fontWeight = 'bold';
+    textDisplay.style.display = 'flex';
+    textDisplay.style.alignItems = 'center';
+    textDisplay.style.justifyContent = 'center';
     
-    card.appendChild(imageDisplay);
+    card.appendChild(textDisplay);
     
     const optionsContainer = document.createElement('div');
     optionsContainer.className = `word-options-container ${isSelected ? 'active' : ''}`;
     optionsContainer.id = `options-${pair.id}`;
     
     if (isSelected && !isMatched && !isWrong) {
-      const options = generateWordOptions(pair);
+      const options = generateImageOptions(pair);
       const optionsWrapper = document.createElement('div');
       optionsWrapper.className = 'word-options';
       
-      options.forEach((word) => {
+      options.forEach((icon) => {
         const option = document.createElement('button');
         option.className = 'word-option';
-        option.textContent = word;
+        option.textContent = icon;
+        option.style.fontSize = '2rem';
         option.onclick = (e) => {
           e.stopPropagation();
-          handleWordSelection(pair.id, word);
+          handleImageSelection(pair.id, icon);
         };
         optionsWrapper.appendChild(option);
       });
@@ -307,7 +315,7 @@ function renderCurrentPage() {
   updateScoreDisplay();
 }
 
-function handleWordSelection(pairId, selectedWord) {
+function handleImageSelection(pairId, selectedIcon) {
   if (state.isPaused) return;
   
   const pair = wordImagePairs.find(p => p.id === pairId);
@@ -332,9 +340,9 @@ function handleWordSelection(pairId, selectedWord) {
   const optionButtons = optionsContainer.querySelectorAll('.word-option');
   
   optionButtons.forEach(btn => {
-    if (btn.textContent === pair.word) {
+    if (btn.textContent === pair.icon) {
       btn.classList.add('correct');
-    } else if (btn.textContent === selectedWord) {
+    } else if (btn.textContent === selectedIcon) {
       btn.classList.add('wrong');
     }
   });
@@ -348,7 +356,7 @@ function handleWordSelection(pairId, selectedWord) {
   }
   
   setTimeout(() => {
-    if (selectedWord === pair.word) {
+    if (selectedIcon === pair.icon) {
       pageStats.correctCount++;
       state.matchedPairs.push(pairId);
       updateTargetCompleted();
@@ -604,9 +612,24 @@ function showStatsModal(showCelebration = false) {
 }
 
 function showSimpleCompleteModal(showCelebration = false) {
-  const modal = document.getElementById('modal');
-  const message = document.getElementById('modal-message');
-  const btn = document.getElementById('modal-btn');
+  // 先检查 modal 是否存在，避免出错
+  let modal = document.getElementById('modal');
+  let message = document.getElementById('modal-message');
+  let btn = document.getElementById('modal-btn');
+  
+  // 如果不存在这些元素，就跳过简单完成弹窗，直接继续
+  if (!modal || !message || !btn) {
+    // 直接继续游戏
+    if (state.currentPage >= state.totalPages) {
+      addMorePage();
+    }
+    if (state.currentPage < state.totalPages) {
+      state.currentPage++;
+    }
+    state.selectedImage = null;
+    renderCurrentPage();
+    return;
+  }
   
   if (showCelebration) {
     message.textContent = '🎉 恭喜！你完成了这一难度的所有关卡！';

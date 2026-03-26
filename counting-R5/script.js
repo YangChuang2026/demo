@@ -1,12 +1,10 @@
 const queryParams = new URLSearchParams(window.location.search);
 
-// 解析 difficulty，默认 1，范围 [1,2,3,4]
 let difficultyParam = parseInt(queryParams.get('difficulty')) || 1;
 if (difficultyParam < 1 || difficultyParam > 4) {
   difficultyParam = 1;
 }
 
-// 解析 levels，根据 difficulty 自动设置
 let levelsParam = parseInt(queryParams.get('levels'));
 if (levelsParam === null || levelsParam === undefined || levelsParam < 1) {
   if (difficultyParam === 1) levelsParam = 1;
@@ -15,7 +13,6 @@ if (levelsParam === null || levelsParam === undefined || levelsParam < 1) {
   else if (difficultyParam === 4) levelsParam = 10;
 }
 
-// 解析 stats，默认 1
 let statsParam = parseInt(queryParams.get('stats'));
 if (statsParam === null || statsParam === undefined || (statsParam !== 0 && statsParam !== 1)) {
   statsParam = 1;
@@ -30,7 +27,6 @@ window.urlParams = {
     stats: statsParam
 };
 
-// 游戏内部记录这些参数值
 const gameParams = {
     userId: window.urlParams.userId,
     gameId: window.urlParams.gameId,
@@ -39,15 +35,13 @@ const gameParams = {
     stats: window.urlParams.stats
 };
 
-// 难度等级与星星数映射（基于累计正确数）
 const DIFFICULTY_THRESHOLDS = {
-    1: 0,    // 难度1（0星）初始
-    2: 2,    // 难度2（1星）完成2次正确
-    3: 5,    // 难度3（2星）完成5次正确
-    4: 10    // 难度4（3星）完成10次正确
+    1: 0,
+    2: 2,
+    3: 5,
+    4: 10
 };
 
-// 根据当前难度获取总关卡数
 function getTotalLevelsForDifficulty(difficulty) {
     if (difficulty === 1) return 1;
     if (difficulty === 2) return 2;
@@ -56,9 +50,11 @@ function getTotalLevelsForDifficulty(difficulty) {
     return 1;
 }
 
-// 检查是否达到新的难度等级
 function checkDifficultyUpgrade() {
-    const currentStars = Game.getStarRating();  // 0-4，基于 totalFound
+    // 如果难度锁定，直接返回 false（不再自动升级）
+    if (Game.state.isDifficultyLocked) return false;
+    
+    const currentStars = Game.getStarRating();
     const achievedDifficulty = currentStars === 0 ? 1 : currentStars + 1;
     
     if (achievedDifficulty > gameParams.difficulty) {
@@ -80,10 +76,14 @@ const Game = {
         items: [],
         basketCount: 0,
         savedState: null,
-        maxRounds: 0,      // 最大回合数（从 levels 参数获取）
-        completedRounds: 0, // 已完成的回合数
-        gameStartTime: null, // 游戏开始时间
-        uploadedDifficulty: 0  // 记录已上传数据的难度等级，防止重复上传
+        maxRounds: 0,
+        completedRounds: 0,
+        gameStartTime: null,
+        uploadedDifficulty: 0,
+        lastStarRating: 0,
+        isDifficultyLocked: false,
+        targetTotalFound: 0,
+        isGameComplete: false
     },
 
     elements: {},
@@ -119,6 +119,10 @@ const Game = {
             modalBtn: document.getElementById('modal-btn'),
             totalDisplay: document.getElementById('total-display'),
             ratingDisplay: document.getElementById('rating-display'),
+            levelDisplay: document.getElementById('level-display'),
+            targetInfo: document.getElementById('target-info'),
+            targetTotal: document.getElementById('target-total'),
+            targetCompleted: document.getElementById('target-completed'),
             
             statsModal: document.getElementById('stats-modal'),
             statsContinueBtn: document.getElementById('stats-continue-btn'),
@@ -220,12 +224,46 @@ const Game = {
         this.state.basketCount = 0;
         this.state.gameStartTime = Date.now();
         this.state.uploadedDifficulty = 0;
-        this.state.maxRounds = gameParams.levels;  // 设置最大回合数
+        this.state.lastStarRating = 0;
+        this.state.maxRounds = gameParams.levels;
         this.state.completedRounds = 0;
+        this.state.isGameComplete = false;
+        
+        const urlDifficulty = parseInt(new URLSearchParams(window.location.search).get('difficulty'));
+        this.state.isDifficultyLocked = !isNaN(urlDifficulty) && urlDifficulty >= 1 && urlDifficulty <= 4;
+        
+        // 设置目标难度和初始难度
+        if (this.state.isDifficultyLocked) {
+            gameParams.difficulty = urlDifficulty;  // 目标难度
+        }
+        
+        // 设置目标累计正确数
+        if (this.state.isDifficultyLocked) {
+            const lockedDifficulty = gameParams.difficulty;
+            if (lockedDifficulty === 1) {
+                this.state.targetTotalFound = 2;
+            } else if (lockedDifficulty === 2) {
+                this.state.targetTotalFound = 5;
+            } else if (lockedDifficulty === 3) {
+                this.state.targetTotalFound = 10;
+            } else if (lockedDifficulty === 4) {
+                this.state.targetTotalFound = 30;
+            }
+        } else {
+            this.state.targetTotalFound = Infinity;
+        }
 
         Stats.init();
         this.updateRating();
         this.updateBasketCount();
+        
+        if (this.state.isDifficultyLocked) {
+            this.elements.targetInfo.style.display = 'block';
+            this.elements.targetTotal.textContent = this.state.targetTotalFound;
+            this.updateTargetCompleted();
+        } else {
+            this.elements.targetInfo.style.display = 'none';
+        }
         
         this.hideAllScreens();
         
@@ -243,6 +281,7 @@ const Game = {
         this.clearBasket();
         this.generateItems();
         this.updateTaskDisplay();
+        this.updateLevelDisplay();
         
         Stats.startNewRound();
         
@@ -343,9 +382,7 @@ const Game = {
         
         let position = null;
         
-        // 第一步：使用改进的随机放置算法，最大尝试500次
         for (let attempt = 0; attempt < 500; attempt++) {
-            // 使用 sqrt(random) 生成半径，使物品更集中在中心但边缘也有分布
             const radius = minRadius + Math.sqrt(Math.random()) * (maxRadius - minRadius);
             const angle = Math.random() * Math.PI * 2;
             
@@ -361,7 +398,6 @@ const Game = {
             }
         }
         
-        // 第二步：如果随机放置失败，使用网格抖动放置算法
         if (!position) {
             position = this.gridBasedSearch(centerX, centerY, containerWidth, containerHeight, itemSize, minDistance, minRadius, maxRadius);
         }
@@ -488,14 +524,22 @@ const Game = {
     },
 
     handleTargetItem: function(item) {
+        if (this.state.isGameComplete) return;
+        
         DragDrop.placeItemInBasket(item);
         this.state.basketCount++;
         this.updateBasketCount();
         this.state.k--;
         this.state.totalFound++;
+        this.updateTargetCompleted();
         this.updateTaskDisplay();
         this.updateTotalDisplay();
         this.updateRating();
+        
+        if (this.state.isDifficultyLocked && this.state.totalFound >= this.state.targetTotalFound) {
+            this.gameComplete();
+            return;
+        }
         
         if (this.state.k === 0) {
             this.handleRoundComplete();
@@ -509,7 +553,6 @@ const Game = {
     },
 
     handleRoundComplete: function() {
-        // 标记该回合已完成
         this.state.completedRounds++;
         
         Animation.createConfetti(this.elements.taskDisplay);
@@ -517,19 +560,21 @@ const Game = {
         Stats.handleRoundComplete();
         const sessionData = Stats.getAllRoundsData();
         
-        // 检查是否达到新的难度等级（先不修改状态）
-        const currentStars = Game.getStarRating();
-        const achievedDifficulty = currentStars === 0 ? 1 : currentStars + 1;
-        const shouldShowCelebration = (achievedDifficulty > gameParams.difficulty);
+        // 难度锁定时，只在完成所有任务时显示庆祝
+        let shouldShowCelebration = false;
+        if (this.state.isDifficultyLocked) {
+            shouldShowCelebration = (this.state.completedRounds >= this.state.maxRounds || this.state.totalFound >= this.state.targetTotalFound);
+        } else {
+            const currentStars = Game.getStarRating();
+            const achievedDifficulty = currentStars === 0 ? 1 : currentStars + 1;
+            shouldShowCelebration = (achievedDifficulty > gameParams.difficulty);
+        }
         
-        // 根据 stats 参数决定是否显示统计界面
         if (gameParams.stats === 0) {
-            // stats=0：显示简单完成提示
             this.showSimpleCompleteModal(shouldShowCelebration);
             return;
         }
         
-        // stats=1：显示技术统计弹窗
         const shouldShowStats = (
             this.state.totalFound >= GameConfig.rating.fourStar ||
             this.state.totalFound >= GameConfig.rating.threeStar ||
@@ -559,7 +604,6 @@ const Game = {
         this.elements.statReactionTime.textContent = Stats.formatTime(avgReactionTime);
         this.elements.statOperationTime.textContent = Stats.formatTime(avgOperationTime);
         
-        // 显示祝贺信息（如果难度升级）
         const progressMessage = document.getElementById('progressMessage');
         if (progressMessage) {
             if (showCelebration) {
@@ -584,13 +628,28 @@ const Game = {
         setTimeout(() => {
             this.elements.statsModal.style.display = 'none';
             
-            // 检查是否达到新的难度等级
-            const difficultyUpgraded = checkDifficultyUpgrade();
-            
-            // 如果难度升级且尚未上传过该难度的数据，则上传
-            if (difficultyUpgraded && this.state.uploadedDifficulty < gameParams.difficulty) {
-                this.sendFinalGameData();
-                this.state.uploadedDifficulty = gameParams.difficulty;
+            // 难度锁定时，只在完成所有任务时上报数据
+            if (this.state.isDifficultyLocked) {
+                const isFinalComplete = (this.state.completedRounds >= this.state.maxRounds || this.state.totalFound >= this.state.targetTotalFound);
+                if (isFinalComplete && !this.state.uploadedDifficulty) {
+                    this.sendFinalGameData();
+                    this.state.uploadedDifficulty = 1;  // 标记已上报
+                }
+            } else {
+                // 非锁定难度，按原逻辑处理
+                const currentStars = this.getStarRating();
+                const starUpgraded = currentStars > this.state.lastStarRating;
+                
+                if (starUpgraded) {
+                    this.sendFinalGameData();
+                    this.state.lastStarRating = currentStars;
+                }
+                
+                if (starUpgraded && currentStars === 4) {
+                    alert('🎉 恭喜你完成了所有难度！游戏结束！');
+                    this.exitToMenu();
+                    return;
+                }
             }
             
             this.continueGame();
@@ -602,7 +661,6 @@ const Game = {
         Animation.showModal(this.elements.modal);
     },
 
-    // 显示简单完成提示（stats=0 时使用）
     showSimpleCompleteModal: function(showCelebration = false) {
         const modal = this.elements.modal;
         const message = this.elements.modalMessage;
@@ -614,28 +672,31 @@ const Game = {
             message.textContent = '恭喜完成！';
         }
         
-        // 移除旧的点击事件
         btn.replaceWith(btn.cloneNode(true));
         this.elements.modalBtn = document.getElementById('modal-btn');
         
-        // 添加新的点击事件
         this.elements.modalBtn.addEventListener('click', () => {
             Animation.hideModal(modal, () => {
-                // 检查是否达到新的难度等级
-                const difficultyUpgraded = checkDifficultyUpgrade();
-                
-                // 如果难度升级且尚未上传过该难度的数据，则上传
-                if (difficultyUpgraded && this.state.uploadedDifficulty < gameParams.difficulty) {
-                    this.sendFinalGameData();
-                    this.state.uploadedDifficulty = gameParams.difficulty;
+                // 难度锁定时，只在完成所有任务时上报数据
+                if (this.state.isDifficultyLocked) {
+                    const isFinalComplete = (this.state.completedRounds >= this.state.maxRounds || this.state.totalFound >= this.state.targetTotalFound);
+                    if (isFinalComplete && !this.state.uploadedDifficulty) {
+                        this.sendFinalGameData();
+                        this.state.uploadedDifficulty = 1;  // 标记已上报
+                    }
+                } else {
+                    // 非锁定难度，按原逻辑处理
+                    const difficultyUpgraded = checkDifficultyUpgrade();
+                    
+                    if (difficultyUpgraded && this.state.uploadedDifficulty < gameParams.difficulty) {
+                        this.sendFinalGameData();
+                        this.state.uploadedDifficulty = gameParams.difficulty;
+                    }
                 }
                 
-                // 检查是否达到最大回合数
                 if (this.state.completedRounds >= this.state.maxRounds) {
-                    // 重新开始
                     this.startGame();
                 } else {
-                    // 继续下一个回合
                     this.startNewRound();
                 }
             });
@@ -646,13 +707,10 @@ const Game = {
         Animation.hideModal(this.elements.modal, () => {
             this.updateDifficultyLevel();
             
-            // 检查是否达到最大回合数
             if (this.state.completedRounds >= this.state.maxRounds) {
-                // 游戏结束
                 alert('恭喜！已完成所有回合！');
                 this.exitToMenu();
             } else {
-                // 继续下一个回合
                 Animation.animateCurtain(this.elements.curtain, true, () => {
                     this.startNewRound();
                 });
@@ -673,7 +731,31 @@ const Game = {
         this.elements.totalDisplay.textContent = `总共找到：${this.state.totalFound} 个目标物品`;
     },
 
+    updateLevelDisplay: function() {
+        const currentRound = this.state.completedRounds + 1;
+        const maxRounds = this.state.maxRounds || gameParams.levels;
+        this.elements.levelDisplay.textContent = `第${currentRound}关`;
+    },
+
+    updateTargetCompleted: function() {
+        if (this.state.isDifficultyLocked) {
+            this.elements.targetCompleted.textContent = this.state.totalFound;
+        }
+    },
+
     getStarRating: function() {
+        if (this.state.isDifficultyLocked) {
+            const lockedDifficulty = gameParams.difficulty;
+            // 难度锁定时，未完成目标前显示 targetDifficulty - 1，完成后显示 targetDifficulty
+            const targetThreshold = this.state.targetTotalFound;
+            if (this.state.totalFound >= targetThreshold) {
+                return lockedDifficulty;  // 已完成目标，返回目标难度
+            } else {
+                return Math.max(0, lockedDifficulty - 1);  // 未完成，返回目标难度 - 1
+            }
+        }
+        
+        // 否则原有动态计算逻辑
         let stars = 0;
         if (this.state.totalFound >= GameConfig.rating.fourStar) {
             stars = 4;
@@ -735,22 +817,13 @@ const Game = {
             return;
         }
 
-        // userId：长整型，从 URL 参数获取，默认 0
         const userId = window.urlParams.userId || 0;
-        
-        // gameId：长整型，从 URL 参数获取，默认 0
         const gameId = window.urlParams.gameId || 0;
-        
-        // game：固定为 "ABLLS_R5"
         const game = 'ABLLS_R5';
-        
-        // difficulty：当前已完成难度等级（星星数）
-        const difficulty = gameParams.difficulty || 1;
-        
-        // levels：玩家实际完成的回合数
+        // 难度锁定时，difficulty 始终为锁定值；否则根据星星数计算
+        const difficulty = this.state.isDifficultyLocked ? gameParams.difficulty : (this.getStarRating() === 0 ? 1 : this.getStarRating());
         const levels = Stats.currentSession.rounds.length;
         
-        // 计算 accuracy：正确放入木框次数 / 放入木框的物品总数
         let totalCorrect = 0;
         let totalAttempts = 0;
         Stats.currentSession.rounds.forEach(round => {
@@ -759,7 +832,6 @@ const Game = {
         });
         const accuracy = totalAttempts > 0 ? totalCorrect / totalAttempts : 0;
         
-        // 构建时间数组
         const reactionTime = [];
         const operationTime = [];
         const totalTime = [];
@@ -767,21 +839,18 @@ const Game = {
         for (let i = 0; i < levels; i++) {
             const round = Stats.currentSession.rounds[i];
             if (round) {
-                // reactionTime：整数，无反应时间则为 -1
                 if (round.reactionTime && round.reactionTime > 0) {
                     reactionTime.push(Math.round(round.reactionTime));
                 } else {
                     reactionTime.push(-1);
                 }
                 
-                // operationTime：整数，无操作时间则为 -1
                 if (round.operationTime && round.operationTime > 0) {
                     operationTime.push(Math.round(round.operationTime));
                 } else {
                     operationTime.push(-1);
                 }
                 
-                // totalTime：反应时间 + 操作时间
                 const rt = reactionTime[reactionTime.length - 1];
                 const ot = operationTime[operationTime.length - 1];
                 
@@ -794,15 +863,18 @@ const Game = {
                     total = ot;
                 }
                 totalTime.push(total);
+                
+                // 如果 operationTime 为 -1 但 totalTime 不为 -1，则用 totalTime 填充 operationTime
+                if (operationTime[operationTime.length - 1] === -1 && totalTime[totalTime.length - 1] !== -1) {
+                    operationTime[operationTime.length - 1] = totalTime[totalTime.length - 1];
+                }
             } else {
-                // 该回合未进行，填充 -1
                 reactionTime.push(-1);
                 operationTime.push(-1);
                 totalTime.push(-1);
             }
         }
         
-        // gameTime：从游戏开始到最后一个回合结束的毫秒数
         let gameTime = 0;
         if (this.state.gameStartTime) {
             const lastRoundEndTime = Stats.currentSession.rounds.length > 0 
@@ -815,10 +887,8 @@ const Game = {
             }
         }
         
-        // timestamp：ISO 8601 格式 UTC 时间
         const timestamp = new Date().toISOString();
         
-        // 构建数据对象
         const gameData = {
             userId: userId,
             game: game,
@@ -840,6 +910,15 @@ const Game = {
         if (typeof sendGameData === 'function') {
             sendGameData(gameData);
         }
+    },
+
+    gameComplete: function() {
+        if (this.state.isGameComplete) return;
+        this.state.isGameComplete = true;
+        
+        this.sendFinalGameData();
+        alert('🎉 恭喜！你已完成目标！');
+        this.exitToMenu();
     },
 
     exitToMenu: function() {

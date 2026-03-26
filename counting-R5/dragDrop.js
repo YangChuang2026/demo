@@ -115,6 +115,11 @@ const DragDrop = {
         item.style.zIndex = '';
         item.style.left = '';
         item.style.top = '';
+        // 如果有原始坐标，恢复到原始位置
+        if (this.originalX !== undefined && this.originalY !== undefined) {
+            item.style.left = this.originalX + 'px';
+            item.style.top = this.originalY + 'px';
+        }
         this.originalParent.appendChild(item);
     },
 
