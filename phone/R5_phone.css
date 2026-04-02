@@ -1,0 +1,311 @@
+/* ==========================================
+   counting-R5 横屏手机适配
+   ========================================== */
+
+/* 基础横屏适配 */
+@media (orientation: landscape) {
+  body {
+    overflow: auto;
+  }
+
+  /* 菜单屏幕 */
+  .menu-title {
+    font-size: 2rem;
+    margin-bottom: 2rem;
+  }
+
+  .menu-btn {
+    padding: 0.8rem 2rem;
+    font-size: 1rem;
+  }
+
+  /* 说明和历史屏幕 */
+  .instructions-container,
+  .history-container {
+    padding: 1.5rem;
+    margin: 10px;
+    max-height: 85vh;
+  }
+
+  /* 顶部栏 */
+  #top-bar {
+    padding: 0.5rem 1rem;
+  }
+
+  #game-controls {
+    gap: 0.5rem;
+  }
+
+  .control-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    border-radius: 6px;
+  }
+
+  #task-display {
+    font-size: 1rem;
+    padding: 0 0.5rem;
+  }
+
+  #stats {
+    gap: 0.5rem;
+  }
+
+  #total-display {
+    font-size: 0.8rem;
+  }
+
+  #rating-display {
+    font-size: 1.2rem;
+  }
+
+  /* 主区域 */
+  #main-area {
+    display: flex;
+    flex-direction: row;
+  }
+
+  /* 物品容器 */
+  #items-container {
+    padding: 0.5rem;
+  }
+
+  /* 物品 */
+  .item {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    font-size: 2rem;
+  }
+
+  /* 篮子区域 */
+  #basket-area {
+    width: 150px;
+    padding: 0.5rem;
+  }
+
+  #basket {
+    width: 140px;
+    height: 120px;
+    border-radius: 0 0 40px 40px;
+  }
+
+  #basket::before {
+    width: 100px;
+    height: 35px;
+    margin-top: -35px;
+  }
+
+  #basket-count {
+    font-size: 2.5rem;
+    padding-top: 15px;
+  }
+
+  /* 暂停内容 */
+  .pause-content {
+    padding: 2rem;
+    margin: 10px;
+  }
+
+  .pause-content h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  /* 幕布 */
+  #curtain {
+    font-size: 1.5rem;
+  }
+
+  /* 弹窗 */
+  .modal-content {
+    padding: 2rem;
+    margin: 10px;
+  }
+
+  .modal-content h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  #modal-btn {
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+  }
+
+  /* 统计弹窗 */
+  .stats-modal-content {
+    padding: 1.5rem;
+    margin: 10px;
+    max-height: 85vh;
+  }
+
+  .stats-modal-content h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .stats-grid {
+    gap: 0.8rem;
+    margin-bottom: 1rem;
+  }
+
+  .stat-item {
+    padding: 0.8rem;
+    border-radius: 8px;
+  }
+
+  .stat-label {
+    font-size: 0.8rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .stat-value {
+    font-size: 1.3rem;
+  }
+
+  .chart-label {
+    width: 80px;
+    font-size: 0.8rem;
+  }
+
+  .chart-bar-wrapper {
+    height: 25px;
+  }
+
+  .chart-value {
+    width: 70px;
+    font-size: 0.8rem;
+  }
+
+  .chart-legend {
+    gap: 1rem;
+    margin-top: 0.8rem;
+    padding-top: 0.8rem;
+  }
+}
+
+/* ==========================================
+   针对不同宽度的微调
+   ========================================== */
+
+/* 超小屏幕 (≤ 370px) */
+@media (orientation: landscape) and (max-width: 370px) {
+  .menu-title {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .menu-btn {
+    padding: 0.6rem 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  #top-bar {
+    padding: 0.4rem 0.8rem;
+  }
+
+  .control-btn {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  #task-display {
+    font-size: 0.9rem;
+  }
+
+  #rating-display {
+    font-size: 1.1rem;
+  }
+
+  .item {
+    width: 35px;
+    height: 35px;
+    min-width: 35px;
+    font-size: 1.7rem;
+  }
+
+  #basket-area {
+    width: 130px;
+  }
+
+  #basket {
+    width: 120px;
+    height: 100px;
+  }
+
+  #basket::before {
+    width: 85px;
+    height: 30px;
+    margin-top: -30px;
+  }
+
+  #basket-count {
+    font-size: 2rem;
+    padding-top: 10px;
+  }
+
+  .stats-modal-content {
+    padding: 1rem;
+  }
+
+  .stats-grid {
+    gap: 0.5rem;
+  }
+
+  .stat-item {
+    padding: 0.5rem;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+  }
+
+  .stat-value {
+    font-size: 1.1rem;
+  }
+}
+
+/* 中等屏幕 (371px - 400px) */
+@media (orientation: landscape) and (min-width: 371px) and (max-width: 400px) {
+  .item {
+    width: 42px;
+    height: 42px;
+    font-size: 2.1rem;
+  }
+
+  #basket-area {
+    width: 160px;
+  }
+
+  #basket {
+    width: 150px;
+    height: 125px;
+  }
+
+  #basket-count {
+    font-size: 2.6rem;
+  }
+}
+
+/* 较大屏幕 (> 400px) */
+@media (orientation: landscape) and (min-width: 401px) {
+  .item {
+    width: 45px;
+    height: 45px;
+    font-size: 2.3rem;
+  }
+
+  #basket-area {
+    width: 180px;
+  }
+
+  #basket {
+    width: 165px;
+    height: 135px;
+  }
+
+  #basket-count {
+    font-size: 2.8rem;
+  }
+}

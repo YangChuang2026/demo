@@ -1,0 +1,311 @@
+/* ==========================================
+   matching-Q5 横屏手机适配
+   ========================================== */
+
+/* 基础横屏适配 */
+@media (orientation: landscape) {
+  body {
+    padding: 8px;
+  }
+
+  .container {
+    max-width: 100%;
+  }
+
+  /* 游戏屏幕 */
+  .game-screen {
+    padding: 15px;
+    border-radius: 15px;
+  }
+
+  /* 游戏控制按钮 */
+  .game-controls {
+    margin-bottom: 10px;
+    gap: 6px;
+  }
+
+  .control-btn {
+    padding: 6px 12px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+
+  /* 头部 */
+  .header {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+  }
+
+  .back-btn,
+  .nav-btn,
+  .more-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+
+  /* 得分显示 */
+  .score-display {
+    font-size: 15px;
+  }
+
+  .stars {
+    font-size: 18px;
+    margin-left: 6px;
+  }
+
+  .page-info {
+    font-size: 14px;
+  }
+
+  /* 图片网格 */
+  .images-grid {
+    gap: 12px;
+    margin-bottom: 15px;
+  }
+
+  /* 图片卡片 */
+  .image-card {
+    padding: 15px;
+    border-radius: 12px;
+  }
+
+  /* 图片/文字显示 */
+  .image-display {
+    font-size: 40px;
+    margin-bottom: 10px;
+  }
+
+  /* 文字选项 */
+  .word-options {
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .word-option {
+    padding: 6px 12px;
+    font-size: 13px;
+    border-radius: 6px;
+  }
+
+  /* 导航按钮 */
+  .navigation {
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  /* 菜单屏幕 */
+  .menu-screen {
+    padding: 20px;
+    border-radius: 15px;
+  }
+
+  .menu-title {
+    font-size: 24px;
+    margin-bottom: 25px;
+  }
+
+  .menu-buttons {
+    gap: 12px;
+  }
+
+  .menu-btn {
+    padding: 12px 30px;
+    font-size: 16px;
+    border-radius: 12px;
+  }
+
+  /* 弹窗 */
+  .modal-card {
+    padding: 20px;
+    border-radius: 12px;
+    max-width: 90%;
+    width: 400px;
+  }
+
+  .modal-title {
+    font-size: 18px;
+    margin-bottom: 12px;
+  }
+
+  .stats-grid {
+    gap: 10px;
+    margin-bottom: 15px;
+  }
+
+  .stat-item {
+    padding: 10px;
+    border-radius: 8px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    margin-bottom: 3px;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .progress-message {
+    padding: 10px;
+    font-size: 14px;
+    margin-bottom: 15px;
+  }
+
+  .modal-close-btn {
+    padding: 10px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+
+  .pause-modal-buttons {
+    gap: 10px;
+    margin-top: 12px;
+  }
+}
+
+/* ==========================================
+   针对不同宽度的微调
+   ========================================== */
+
+/* 超小屏幕 (≤ 360px) */
+@media (orientation: landscape) and (max-width: 370px) {
+  body {
+    padding: 5px;
+  }
+
+  .game-screen {
+    padding: 10px;
+  }
+
+  .game-controls {
+    margin-bottom: 8px;
+    gap: 4px;
+  }
+
+  .control-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  .header {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+  }
+
+  .back-btn,
+  .nav-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+
+  .score-display {
+    font-size: 13px;
+  }
+
+  .stars {
+    font-size: 16px;
+  }
+
+  .page-info {
+    font-size: 12px;
+  }
+
+  .images-grid {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .image-card {
+    padding: 10px;
+    border-radius: 10px;
+  }
+
+  .image-display {
+    font-size: 32px;
+    margin-bottom: 8px;
+  }
+
+  .word-options {
+    gap: 5px;
+    margin-top: 8px;
+  }
+
+  .word-option {
+    padding: 5px 10px;
+    font-size: 11px;
+    border-radius: 5px;
+  }
+
+  .menu-screen {
+    padding: 15px;
+  }
+
+  .menu-title {
+    font-size: 20px;
+    margin-bottom: 20px;
+  }
+
+  .menu-btn {
+    padding: 10px 24px;
+    font-size: 14px;
+  }
+
+  .modal-card {
+    padding: 15px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+  }
+
+  .stat-value {
+    font-size: 16px;
+  }
+
+  .progress-message {
+    font-size: 12px;
+  }
+
+  .modal-close-btn {
+    padding: 8px;
+    font-size: 13px;
+  }
+}
+
+/* 中等屏幕 (371px - 400px) */
+@media (orientation: landscape) and (min-width: 371px) and (max-width: 400px) {
+  .image-display {
+    font-size: 36px;
+  }
+
+  .word-option {
+    padding: 7px 14px;
+    font-size: 14px;
+  }
+}
+
+/* 较大屏幕 (> 400px) */
+@media (orientation: landscape) and (min-width: 401px) {
+  .images-grid {
+    gap: 15px;
+  }
+
+  .image-card {
+    padding: 18px;
+  }
+
+  .image-display {
+    font-size: 45px;
+  }
+
+  .word-option {
+    padding: 8px 16px;
+    font-size: 15px;
+  }
+}

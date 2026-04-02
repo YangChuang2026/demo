@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿// 解析 URL 参数
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿// 解析 URL 参数
 function parseUrlParams() {
   const queryParams = new URLSearchParams(window.location.search);
   
